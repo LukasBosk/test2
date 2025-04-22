@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interaktivní mapa s Leaflet.js</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            background: #f0f0f0; /* Záložní barva pozadí */
+        }
+        #map {
+            width: 100vw; /* Celá šířka obrazovky */
+            height: 100vh; /* Celá výška obrazovky */
+            background: url('pozadi.jpg') no-repeat center center; /* Obrázek jako pozadí */
+            background-size: cover; /* Přizpůsobení obrázku velikosti mapy */
+        }
+        .popup-box {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.75); /* Bílé pozadí se 75% průhledností */
+            border: 1px solid #ccc;
+            width: 600px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            color: #333;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            z-index: 1000; /* Zvýšený z-index nad mapu */
+            display: none; /* Skryté ve výchozím stavu */
+        }
+        .popup-box .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="popup" class="popup-box">
+        <div class="close-btn" onclick="closePopup()">×</div>
+        <div id="popup-content">Toto je ukázkový text, který se zobrazí po kliknutí na bod.</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Nové rozměry obrázku
+        const imgWidth = 1872;  // Šířka obrázku v pixelech
+        const imgHeight = 2500; // Výška obrázku v pixelech
+
+        // Proměnná pro měřítko obrázku
+        const imageBounds = [[0, 0], [imgHeight, imgWidth]];
+
+        // Inicializace mapy
+        const map = L.map('map', {
+            crs: L.CRS.Simple, // Zjednodušený CRS pro statické obrázky
+            minZoom: -4, // Možnost většího oddálení mapy
+            maxBounds: imageBounds, // Omezení pohybu na obrázek
+            maxBoundsViscosity: 1.0 // Zamezení posunu mimo obrázek
+        });
+
+        // Načtení obrázku jako mapové vrstvy
+        const imageLayer = L.imageOverlay('mapa.jpg', imageBounds).addTo(map);
+
+        // Nastavení zobrazení mapy
+        map.fitBounds(imageBounds);
+
+        let isPopupOpen = false; // Stav pro kontrolu, zda je textové pole otevřené
+        let previousZoomLevel = null; // Proměnná pro uchování předchozího zoomu
+
+        // Pevná úroveň zoomu (o 50 % méně přiblížená než předtím)
+        const fixedZoomLevel = 0.75;
+
+        // Přidání interaktivního markeru na základě pixelových souřadnic
+        function addMarker(pixelX, pixelY, textContent) {
+            // Přepočet pixelových souřadnic na souřadnice mapy
+            const mapY = imgHeight - pixelY; // Invertování Y osy (Leaflet používá opačnou osu Y)
+            const mapX = pixelX;
+
+            const marker = L.marker([mapY, mapX], {
+                icon: L.divIcon({
+                    className: '', // Prázdná třída pro neviditelný bod
+                    iconSize: [40, 40] // Zdvojnásobená velikost (40x40)
+                })
+            });
+
+            marker.addTo(map).on('click', () => {
+                if (!isPopupOpen) {
+                    showPopup(mapX, mapY, textContent);
+                }
+            });
+        }
+
+        // Funkce pro zobrazení textového pole
+        function showPopup(x, y, textContent) {
+            const popup = document.getElementById('popup');
+            const popupContent = document.getElementById('popup-content');
+
+            // Aktualizace obsahu textového pole
+            popupContent.textContent = textContent;
+
+            // Získání souřadnic markeru v rámci mapového kontejneru
+            const point = map.latLngToContainerPoint([y, x]);
+
+            // Dynamické umístění textového pole těsně vedle bodu
+            let top = point.y - 20; // Menší vertikální odsazení
+            let left = point.x + 5; // Menší horizontální odsazení
+
+            // Zajištění, že textové pole zůstane uvnitř obrázku mapy
+            const mapBounds = map.getBounds();
+            const topLeft = map.latLngToContainerPoint(mapBounds.getNorthWest());
+            const bottomRight = map.latLngToContainerPoint(mapBounds.getSouthEast());
+
+            // Ověření hranic rámečku vůči obrázku mapy
+            if (left + 600 > bottomRight.x) { // Pokud by pole přesáhlo doprava
+                left = bottomRight.x - 600;
+            }
+            if (top < topLeft.y) { // Pokud by pole přesáhlo nahoru
+                top = topLeft.y + 10;
+            }
+            if (top + popup.offsetHeight > bottomRight.y) { // Pokud by pole přesáhlo dolů
+                top = bottomRight.y - popup.offsetHeight - 10;
+            }
+
+            popup.style.top = `${top}px`; // Vertikální pozice
+            popup.style.left = `${left}px`; // Horizontální pozice
+            popup.style.display = 'block';
+            isPopupOpen = true; // Nastavení stavu na otevřené
+
+            // Uložení aktuálního zoomu
+            previousZoomLevel = map.getZoom();
+
+            // Přiblížení mapy na pevný zoom
+            map.setView([y, x], fixedZoomLevel, { animate: true });
+        }
+
+        // Funkce pro zavření textového pole
+        function closePopup() {
+            const popup = document.getElementById('popup');
+            popup.style.display = 'none';
+
+            // Oddálení mapy na předchozí zoom
+            if (previousZoomLevel !== null) {
+                map.setZoom(previousZoomLevel, { animate: true });
+            }
+            isPopupOpen = false; // Nastavení stavu na zavřené
+        }
+
+        // Přidání markeru s přepočítanými souřadnicemi (511px, 572px)
+        addMarker(511, 572, 'Depot 1 byl nalezen v mírném severně orientovaném svahu. Obsahoval 5 bronzových seker s tulejkou, 3 bronzové srpy a 12 bronzových slitků.'); // Pixelové souřadnice obrázku (X, Y)
+    </script>
+</body>
+</html>
