@@ -20,7 +20,8 @@
             position: absolute;
             background: rgba(255, 255, 255, 0.75); /* Bílé pozadí se 75% průhledností */
             border: 1px solid #ccc;
-            width: 600px;
+            width: 80%; /* Šířka je 80 % obrazovky */
+            max-width: 600px; /* Maximální šířka 600px */
             padding: 20px;
             font-family: Arial, sans-serif;
             font-size: 16px;
@@ -73,8 +74,19 @@
         let isPopupOpen = false; // Stav pro kontrolu, zda je textové pole otevřené
         let previousZoomLevel = null; // Proměnná pro uchování předchozího zoomu
 
-        // Pevná úroveň zoomu (o 50 % méně přiblížená než předtím)
-        const fixedZoomLevel = 0.75;
+        // Dynamické nastavení pevného zoomu na základě velikosti obrazovky
+        function getDynamicZoomLevel() {
+            const screenWidth = window.innerWidth;
+
+            // Menší obrazovky -> větší zoom
+            if (screenWidth < 768) {
+                return 1; // Zvýšené přiblížení na menších obrazovkách
+            } else if (screenWidth < 1200) {
+                return 0.75; // Střední přiblížení
+            } else {
+                return 0.5; // Menší přiblížení na větších obrazovkách
+            }
+        }
 
         // Přidání interaktivního markeru na základě pixelových souřadnic
         function addMarker(pixelX, pixelY, textContent) {
@@ -117,14 +129,17 @@
             const bottomRight = map.latLngToContainerPoint(mapBounds.getSouthEast());
 
             // Ověření hranic rámečku vůči obrázku mapy
-            if (left + 600 > bottomRight.x) { // Pokud by pole přesáhlo doprava
-                left = bottomRight.x - 600;
+            const popupWidth = popup.offsetWidth || 600; // Dynamická šířka rámečku
+            const popupHeight = popup.offsetHeight || 50; // Dynamická výška rámečku
+
+            if (left + popupWidth > bottomRight.x) { // Pokud by pole přesáhlo doprava
+                left = bottomRight.x - popupWidth - 5;
             }
             if (top < topLeft.y) { // Pokud by pole přesáhlo nahoru
                 top = topLeft.y + 10;
             }
-            if (top + popup.offsetHeight > bottomRight.y) { // Pokud by pole přesáhlo dolů
-                top = bottomRight.y - popup.offsetHeight - 10;
+            if (top + popupHeight > bottomRight.y) { // Pokud by pole přesáhlo dolů
+                top = bottomRight.y - popupHeight - 10;
             }
 
             popup.style.top = `${top}px`; // Vertikální pozice
@@ -135,8 +150,9 @@
             // Uložení aktuálního zoomu
             previousZoomLevel = map.getZoom();
 
-            // Přiblížení mapy na pevný zoom
-            map.setView([y, x], fixedZoomLevel, { animate: true });
+            // Přiblížení mapy na dynamický zoom
+            const dynamicZoom = getDynamicZoomLevel();
+            map.setView([y, x], dynamicZoom, { animate: true });
         }
 
         // Funkce pro zavření textového pole
